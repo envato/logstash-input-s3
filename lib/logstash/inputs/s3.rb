@@ -55,6 +55,8 @@ class LogStash::Inputs::S3 < LogStash::Inputs::Base
   # default to the current OS temporary directory in linux /tmp/logstash
   config :temporary_directory, :validate => :string, :default => File.join(Dir.tmpdir, "logstash")
 
+  attr_accessor :s3_bucket
+
   public
   def register
     require "fileutils"
@@ -62,10 +64,6 @@ class LogStash::Inputs::S3 < LogStash::Inputs::Base
     require "aws-sdk-resources"
 
     @logger.info("Registering s3 input", :bucket => @bucket, :region => @region)
-
-    s3 = get_s3object
-
-    @s3bucket = s3.bucket(@bucket)
 
     unless @backup_to_bucket.nil?
       @backup_bucket = s3.bucket(@backup_to_bucket)
@@ -95,7 +93,7 @@ class LogStash::Inputs::S3 < LogStash::Inputs::Base
   def list_new_files
     objects = {}
 
-    @s3bucket.objects(:prefix => @prefix).each do |log|
+    s3bucket.objects(:prefix => @prefix).each do |log|
       @logger.debug("S3 input: Found key", :key => log.key)
 
       unless ignore_filename?(log.key)
@@ -293,7 +291,7 @@ class LogStash::Inputs::S3 < LogStash::Inputs::Base
 
   private
   def process_log(queue, key)
-    object = @s3bucket.object(key)
+    object = s3bucket.object(key)
 
     filename = File.join(temporary_directory, File.basename(key))
     if download_remote_file(object, filename)
@@ -336,8 +334,9 @@ class LogStash::Inputs::S3 < LogStash::Inputs::Base
   end
 
   private
-  def get_s3object
-    s3 = Aws::S3::Resource.new(aws_options_hash)
+  def s3bucket
+    @s3object ||= Aws::S3::Resource.new(aws_options_hash)
+    @s3object.bucket(@bucket)
   end
 
   private
